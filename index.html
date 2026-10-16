@@ -1,0 +1,1371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>LedgerFlow</title>
+  <meta name="description" content="Payment orchestration platform: idempotent API backed by a double-entry ledger. Correct under retries, exact with money, provably balanced.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    /* ── Layout: single-column, max-width prose with wide breakouts for diagrams ── */
+    :root {
+      --bg: #fafaf8;
+      --fg: #1a1a2e;
+      --surface: #ffffff;
+      --surface-raised: #f4f4f0;
+      --border: #ddddd8;
+      --muted: #6d6d7a;
+      --accent: #0d7377;
+      --accent-hover: #0a5c5f;
+      --accent-subtle: #e6f3f3;
+      --debit: #b44d2e;
+      --credit: #2e7d5b;
+      --gold: #b8912d;
+      --gold-subtle: #faf5e8;
+      --code-bg: #1e1e2e;
+      --code-fg: #cdd6f4;
+      --code-comment: #6c7086;
+      --code-string: #a6e3a1;
+      --code-keyword: #89b4fa;
+      --code-header: #f38ba8;
+
+      --font-display: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+      --font-body: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+
+      --space-xs: 0.5rem;
+      --space-sm: 1rem;
+      --space-md: 1.5rem;
+      --space-lg: 3rem;
+      --space-xl: 5rem;
+      --space-2xl: 8rem;
+
+      --radius: 8px;
+      --radius-lg: 16px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0e1117;
+        --fg: #e2e2ea;
+        --surface: #181b24;
+        --surface-raised: #1f2230;
+        --border: #2a2d3a;
+        --muted: #8585a0;
+        --accent: #2ec4b6;
+        --accent-hover: #3ed8ca;
+        --accent-subtle: #142a2e;
+        --debit: #e06b4a;
+        --credit: #4ec98a;
+        --gold: #d4a84e;
+        --gold-subtle: #2a2518;
+        --code-bg: #12141e;
+        --code-fg: #cdd6f4;
+        color-scheme: dark;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #0e1117;
+      --fg: #e2e2ea;
+      --surface: #181b24;
+      --surface-raised: #1f2230;
+      --border: #2a2d3a;
+      --muted: #8585a0;
+      --accent: #2ec4b6;
+      --accent-hover: #3ed8ca;
+      --accent-subtle: #142a2e;
+      --debit: #e06b4a;
+      --credit: #4ec98a;
+      --gold: #d4a84e;
+      --gold-subtle: #2a2518;
+      --code-bg: #12141e;
+      --code-fg: #cdd6f4;
+      color-scheme: dark;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--font-body);
+      font-weight: 400;
+      line-height: 1.65;
+      padding-inline: 1rem;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .wrapper {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 400; text-wrap: balance; }
+    h1 { font-size: clamp(2.8rem, 6vw, 4.5rem); line-height: 1.1; letter-spacing: -0.02em; }
+    h2 { font-size: clamp(1.8rem, 3.5vw, 2.6rem); line-height: 1.2; }
+    h3 { font-size: 1.35rem; line-height: 1.3; }
+
+    a { color: var(--accent); text-decoration: none; transition: color 0.2s; }
+    a:hover { color: var(--accent-hover); }
+    a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+      html { scroll-behavior: auto; }
+    }
+
+    /* ── Navigation ── */
+    .nav {
+      position: sticky;
+      top: env(safe-area-inset-top, 0px);
+      z-index: 100;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      padding-block: 0.75rem;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .nav-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .nav-logo {
+      font-family: var(--font-display);
+      font-size: 1.35rem;
+      color: var(--fg);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .nav-logo svg { flex-shrink: 0; }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--muted);
+      font-size: 0.9rem;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--fg); }
+
+    .nav-gh {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.4rem 0.9rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--fg) !important;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .nav-gh:hover { border-color: var(--accent); background: var(--accent-subtle); }
+
+    .nav-toggle { display: none; background: none; border: none; color: var(--fg); cursor: pointer; padding: 0.25rem; }
+
+    @media (max-width: 720px) {
+      .nav-links { display: none; flex-direction: column; position: absolute; top: 100%; left: 0; right: 0; background: var(--bg); border-bottom: 1px solid var(--border); padding: 1rem; gap: 0.75rem; }
+      .nav-links.open { display: flex; }
+      .nav-toggle { display: block; }
+    }
+
+    /* ── Hero ── */
+    .hero {
+      padding-block: var(--space-xl) var(--space-lg);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-lg);
+      align-items: center;
+    }
+
+    @media (max-width: 800px) {
+      .hero { grid-template-columns: 1fr; padding-block: var(--space-lg) var(--space-md); }
+    }
+
+    .hero-text .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--gold);
+      background: var(--gold-subtle);
+      padding: 0.3rem 0.7rem;
+      border-radius: 4px;
+      margin-bottom: var(--space-sm);
+    }
+
+    .hero-text h1 { margin-bottom: var(--space-sm); }
+
+    .hero-text h1 em {
+      font-style: italic;
+      color: var(--accent);
+    }
+
+    .hero-text .lead {
+      font-size: 1.1rem;
+      color: var(--muted);
+      max-width: 50ch;
+      line-height: 1.7;
+    }
+
+    .hero-cta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: var(--space-md);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.65rem 1.4rem;
+      border-radius: 6px;
+      font-family: var(--font-body);
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: background 0.2s, transform 0.15s;
+    }
+    .btn:active { transform: scale(0.97); }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn-primary:hover { background: var(--accent-hover); color: #fff; }
+
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--fg);
+    }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Animated ledger ── */
+    .ledger-demo {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+    }
+
+    .ledger-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.65rem 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-raised);
+    }
+
+    .ledger-header span {
+      font-family: var(--font-body);
+      font-weight: 600;
+      font-size: 0.8rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .ledger-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--credit);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .ledger-body { padding: 0.75rem 1rem; }
+
+    .ledger-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 1rem;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--border);
+      opacity: 0;
+      transform: translateY(6px);
+      animation: row-in 0.4s ease forwards;
+    }
+
+    .ledger-row:last-child { border-bottom: none; }
+    .ledger-row:nth-child(1) { animation-delay: 0.5s; }
+    .ledger-row:nth-child(2) { animation-delay: 1.2s; }
+    .ledger-row:nth-child(3) { animation-delay: 1.9s; }
+
+    @keyframes row-in {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .ledger-account { color: var(--fg); font-weight: 500; }
+
+    .ledger-dir {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 0.15rem 0.45rem;
+      border-radius: 3px;
+    }
+
+    .ledger-dir.debit { color: var(--debit); background: color-mix(in srgb, var(--debit) 12%, transparent); }
+    .ledger-dir.credit { color: var(--credit); background: color-mix(in srgb, var(--credit) 12%, transparent); }
+
+    .ledger-amount { text-align: right; font-variant-numeric: tabular-nums; }
+
+    .ledger-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.65rem 1rem;
+      border-top: 1px solid var(--border);
+      background: var(--surface-raised);
+      opacity: 0;
+      animation: row-in 0.5s ease 2.6s forwards;
+    }
+
+    .ledger-balanced {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-family: var(--font-body);
+      font-weight: 600;
+      font-size: 0.82rem;
+      color: var(--credit);
+    }
+
+    .ledger-id {
+      color: var(--muted);
+      font-size: 0.75rem;
+    }
+
+    /* ── Section rhythm ── */
+    .section {
+      padding-block: var(--space-xl);
+    }
+
+    .section-label {
+      font-family: var(--font-body);
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: var(--space-xs);
+    }
+
+    .section h2 {
+      margin-bottom: var(--space-sm);
+    }
+
+    .section-intro {
+      font-size: 1.05rem;
+      color: var(--muted);
+      max-width: 60ch;
+      margin-bottom: var(--space-lg);
+    }
+
+    /* ── Principles cards ── */
+    .principles {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .principle-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      transition: border-color 0.2s;
+    }
+    .principle-card:hover { border-color: var(--accent); }
+
+    .principle-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      margin-bottom: var(--space-sm);
+      font-size: 1.1rem;
+    }
+
+    .principle-icon.money { background: var(--gold-subtle); color: var(--gold); }
+    .principle-icon.ledger { background: var(--accent-subtle); color: var(--accent); }
+    .principle-icon.retry { background: color-mix(in srgb, var(--debit) 10%, transparent); color: var(--debit); }
+
+    .principle-card h3 {
+      margin-bottom: 0.5rem;
+    }
+
+    .principle-card p {
+      font-size: 0.92rem;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .principle-card code {
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      background: var(--surface-raised);
+      padding: 0.15rem 0.35rem;
+      border-radius: 3px;
+    }
+
+    /* ── Architecture ── */
+    .arch-diagram {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 2rem;
+      overflow-x: auto;
+    }
+
+    .arch-flow {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      min-width: 700px;
+      justify-content: center;
+    }
+
+    .arch-node {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+      flex-shrink: 0;
+    }
+
+    .arch-box {
+      background: var(--surface-raised);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.6rem 1rem;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      font-weight: 500;
+      text-align: center;
+      white-space: nowrap;
+      transition: border-color 0.2s;
+    }
+
+    .arch-box.highlight {
+      border-color: var(--accent);
+      background: var(--accent-subtle);
+    }
+
+    .arch-label {
+      font-size: 0.7rem;
+      color: var(--muted);
+      font-weight: 500;
+      letter-spacing: 0.02em;
+    }
+
+    .arch-arrow {
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+      padding: 0 0.35rem;
+    }
+
+    .arch-arrow-line {
+      width: 36px;
+      height: 1px;
+      background: var(--border);
+      position: relative;
+    }
+
+    .arch-arrow-line::after {
+      content: '';
+      position: absolute;
+      right: -1px;
+      top: -3px;
+      width: 0;
+      height: 0;
+      border-left: 6px solid var(--border);
+      border-top: 3.5px solid transparent;
+      border-bottom: 3.5px solid transparent;
+    }
+
+    .arch-arrow-text {
+      position: absolute;
+      top: -16px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.65rem;
+      color: var(--muted);
+      white-space: nowrap;
+      font-family: var(--font-mono);
+    }
+
+    .arch-group {
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem 1rem 1rem;
+      position: relative;
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-end;
+    }
+
+    .arch-group-label {
+      position: absolute;
+      top: -0.55rem;
+      left: 1rem;
+      background: var(--bg);
+      padding: 0 0.4rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: 0.04em;
+    }
+
+    /* ── Journal entry table ── */
+    .journal-example {
+      margin-top: var(--space-md);
+    }
+
+    .journal-table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    .journal-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+
+    .journal-table th {
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.75rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: var(--surface-raised);
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .journal-table td {
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid var(--border);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .journal-table tr:last-child td { border-bottom: none; }
+
+    .journal-table .dir-cell {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+    .journal-table .dir-cell.debit { color: var(--debit); }
+    .journal-table .dir-cell.credit { color: var(--credit); }
+
+    /* ── API section ── */
+    .api-endpoints {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .api-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 1rem;
+      align-items: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.8rem 1.2rem;
+      transition: border-color 0.2s;
+    }
+    .api-row:hover { border-color: var(--accent); }
+
+    @media (max-width: 600px) {
+      .api-row { grid-template-columns: auto 1fr; gap: 0.5rem; }
+      .api-row .api-note { grid-column: 1 / -1; }
+    }
+
+    .api-method {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      min-width: 3.5rem;
+      text-align: center;
+    }
+    .api-method.get { background: var(--accent-subtle); color: var(--accent); }
+    .api-method.post { background: var(--gold-subtle); color: var(--gold); }
+    .api-method.delete { background: #fde8e8; color: var(--debit); }
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .api-method.delete { background: #2e1a1a; } }
+    :root[data-theme="dark"] .api-method.delete { background: #2e1a1a; }
+
+    .api-path {
+      font-family: var(--font-mono);
+      font-size: 0.88rem;
+      min-width: 0;
+      overflow-wrap: break-word;
+    }
+
+    .api-note {
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    /* Idempotency semantics */
+    .idem-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      margin-top: var(--space-md);
+    }
+
+    .idem-card {
+      display: flex;
+      gap: 0.75rem;
+      padding: 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    .idem-icon {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+    }
+
+    .idem-card:nth-child(1) .idem-icon { background: var(--accent-subtle); color: var(--accent); }
+    .idem-card:nth-child(2) .idem-icon { background: color-mix(in srgb, var(--debit) 10%, transparent); color: var(--debit); }
+    .idem-card:nth-child(3) .idem-icon { background: var(--gold-subtle); color: var(--gold); }
+
+    .idem-card strong {
+      display: block;
+      font-size: 0.85rem;
+      margin-bottom: 0.15rem;
+    }
+    .idem-card p {
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* ── Code block ── */
+    .code-block {
+      background: var(--code-bg);
+      color: var(--code-fg);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-top: var(--space-md);
+    }
+
+    .code-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: rgba(0,0,0,0.3);
+      font-size: 0.78rem;
+      color: var(--code-comment);
+    }
+
+    .code-dots { display: flex; gap: 5px; }
+    .code-dots span { width: 10px; height: 10px; border-radius: 50%; }
+    .code-dots span:nth-child(1) { background: #ed6a5e; }
+    .code-dots span:nth-child(2) { background: #f5bf4f; }
+    .code-dots span:nth-child(3) { background: #61c554; }
+
+    .code-body {
+      padding: 1rem 1.25rem;
+      overflow-x: auto;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      line-height: 1.7;
+    }
+
+    .code-body .c { color: var(--code-comment); }
+    .code-body .s { color: var(--code-string); }
+    .code-body .k { color: var(--code-keyword); }
+    .code-body .h { color: var(--code-header); }
+
+    /* ── Tech stack ── */
+    .stack-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .stack-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.85rem 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    .stack-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: var(--accent-subtle);
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .stack-item strong {
+      display: block;
+      font-size: 0.9rem;
+      font-family: var(--font-body);
+    }
+
+    .stack-item span {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    /* ── Roadmap ── */
+    .roadmap {
+      position: relative;
+      display: grid;
+      gap: 0;
+    }
+
+    .roadmap::before {
+      content: '';
+      position: absolute;
+      left: 15px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--border);
+    }
+
+    .roadmap-item {
+      display: grid;
+      grid-template-columns: 32px 1fr;
+      gap: 1rem;
+      padding-bottom: 1.5rem;
+    }
+
+    .roadmap-marker {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 2px solid var(--border);
+      display: grid;
+      place-items: center;
+      font-size: 0.72rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      color: var(--muted);
+      z-index: 1;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .roadmap-item.active .roadmap-marker {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-subtle);
+    }
+
+    .roadmap-content { padding-top: 0.25rem; }
+
+    .roadmap-content h3 {
+      font-family: var(--font-body);
+      font-weight: 600;
+      font-size: 1rem;
+      margin-bottom: 0.2rem;
+    }
+
+    .roadmap-content p {
+      font-size: 0.88rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .roadmap-tag {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 0.15rem 0.45rem;
+      border-radius: 3px;
+      margin-top: 0.35rem;
+    }
+
+    .roadmap-tag.done { background: var(--accent-subtle); color: var(--accent); }
+    .roadmap-tag.planned { background: var(--surface-raised); color: var(--muted); }
+
+    /* ── Footer ── */
+    .footer {
+      border-top: 1px solid var(--border);
+      padding-block: var(--space-lg);
+      margin-top: var(--space-xl);
+    }
+
+    .footer-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .footer-brand {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 1.5rem;
+      list-style: none;
+    }
+
+    .footer-links a {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .footer-links a:hover { color: var(--fg); }
+
+    .footer-copy {
+      width: 100%;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: var(--space-sm);
+    }
+
+    /* ── Divider ── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin-block: var(--space-lg);
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="#" class="nav-logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        LedgerFlow
+      </a>
+      <button class="nav-toggle" aria-label="Toggle menu" onclick="document.querySelector('.nav-links').classList.toggle('open')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+      </button>
+      <ul class="nav-links">
+        <li><a href="#principles">Design</a></li>
+        <li><a href="#architecture">Architecture</a></li>
+        <li><a href="#api">API</a></li>
+        <li><a href="#stack">Stack</a></li>
+        <li><a href="#roadmap">Roadmap</a></li>
+        <li>
+          <a href="https://github.com/taniyanandi/ledgerflow" target="_blank" rel="noopener" class="nav-gh">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+            Source
+          </a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero wrapper">
+    <div class="hero-text">
+      <div class="badge">Phases 1–4 &amp; 6 — Live</div>
+      <h1>Payment orchestration,<br><em>done right</em></h1>
+      <p class="lead">Idempotent API, double-entry ledger, saga orchestrator with Kafka, HMAC-signed webhooks, settlement reconciliation, ML fraud scoring, and an LLM ops assistant — the full machinery underneath a payment gateway.</p>
+      <div class="hero-cta">
+        <a href="#architecture" class="btn btn-primary">See the architecture</a>
+        <a href="https://github.com/taniyanandi/ledgerflow" target="_blank" rel="noopener" class="btn btn-ghost">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+          View on GitHub
+        </a>
+      </div>
+    </div>
+    <div class="ledger-demo" aria-label="Animated double-entry ledger example">
+      <div class="ledger-header">
+        <span>Journal Entry</span>
+        <div class="ledger-dot"></div>
+      </div>
+      <div class="ledger-body">
+        <div class="ledger-row">
+          <div class="ledger-account">ACQUIRER_CASH</div>
+          <div class="ledger-dir debit">DEBIT</div>
+          <div class="ledger-amount">₹1,500.00</div>
+        </div>
+        <div class="ledger-row">
+          <div class="ledger-account">MERCHANT_PAYABLE</div>
+          <div class="ledger-dir credit">CREDIT</div>
+          <div class="ledger-amount">₹1,500.00</div>
+        </div>
+        <div class="ledger-row">
+          <div class="ledger-account" style="color: var(--muted); font-style: italic;">Capture for payment a3f…</div>
+          <div></div>
+          <div></div>
+        </div>
+      </div>
+      <div class="ledger-footer">
+        <div class="ledger-balanced">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Balanced
+        </div>
+        <div class="ledger-id">entry.assertBalanced()</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Design Principles -->
+  <section id="principles" class="section wrapper">
+    <div class="section-label">Design principles</div>
+    <h2>Three decisions drive everything</h2>
+    <p class="section-intro">Each is a deliberate correctness choice — the kind payment teams actually screen for.</p>
+    <div class="principles">
+      <div class="principle-card">
+        <div class="principle-icon money">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
+        <h3>Integer money</h3>
+        <p>All amounts are integer minor units (paise / cents) stored as <code>BIGINT</code>. <code>0.1 + 0.2 ≠ 0.3</code> has no place in a ledger. No floating-point, no rounding errors, no surprises.</p>
+      </div>
+      <div class="principle-card">
+        <div class="principle-icon ledger">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+        </div>
+        <h3>Derived balances</h3>
+        <p>An account's balance is always computed by summing its ledger lines — never stored. A stored balance can drift; a derived one is correct by construction. Every write posts a balanced journal entry.</p>
+      </div>
+      <div class="principle-card">
+        <div class="principle-icon retry">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </div>
+        <h3>Idempotent writes</h3>
+        <p>Networks retry. The same <code>Idempotency-Key</code> with the same body replays the original response — charged once. The unique constraint in PostgreSQL is the source of truth, not application memory.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider wrapper">
+
+  <!-- Architecture -->
+  <section id="architecture" class="section wrapper">
+    <div class="section-label">Architecture</div>
+    <h2>How a payment moves</h2>
+    <p class="section-intro">A capture posts one balanced journal entry. A refund posts the exact reverse. Because both sides always move together, the books are always balanced.</p>
+
+    <div class="arch-diagram">
+      <div class="arch-flow">
+        <div class="arch-node">
+          <div class="arch-box">Client</div>
+        </div>
+        <div class="arch-arrow">
+          <div class="arch-arrow-line" style="width: 56px;">
+            <span class="arch-arrow-text">POST /v1/payments</span>
+          </div>
+        </div>
+        <div class="arch-node">
+          <div class="arch-box highlight">PaymentController</div>
+          <span class="arch-label">API layer</span>
+        </div>
+        <div class="arch-arrow"><div class="arch-arrow-line"></div></div>
+        <div class="arch-node">
+          <div class="arch-box highlight">PaymentService</div>
+          <span class="arch-label">Orchestrator</span>
+        </div>
+        <div class="arch-arrow"><div class="arch-arrow-line"></div></div>
+        <div class="arch-group">
+          <div class="arch-group-label">Ledger core</div>
+          <div class="arch-node">
+            <div class="arch-box highlight">LedgerService</div>
+            <span class="arch-label">Posts entries</span>
+          </div>
+          <div class="arch-node">
+            <div class="arch-box">IdempotencyService</div>
+            <span class="arch-label">Dedup guard</span>
+          </div>
+        </div>
+        <div class="arch-arrow"><div class="arch-arrow-line"></div></div>
+        <div class="arch-node">
+          <div class="arch-box" style="border-radius: 50%; width: 54px; height: 54px; display: grid; place-items: center;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+          </div>
+          <span class="arch-label">PostgreSQL</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="journal-example">
+      <h3 style="margin-bottom: 0.75rem;">Capture entry</h3>
+      <div class="journal-table-wrap">
+        <table class="journal-table">
+          <thead>
+            <tr>
+              <th>Account</th>
+              <th>Type</th>
+              <th>Direction</th>
+              <th style="text-align: right;">Amount</th>
+              <th>Meaning</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code style="font-family: var(--font-mono); font-size: 0.82rem;">ACQUIRER_CASH</code></td>
+              <td>Asset</td>
+              <td class="dir-cell debit">DEBIT</td>
+              <td style="text-align: right; font-variant-numeric: tabular-nums;">150000</td>
+              <td style="color: var(--muted);">Cash received from acquirer</td>
+            </tr>
+            <tr>
+              <td><code style="font-family: var(--font-mono); font-size: 0.82rem;">MERCHANT_PAYABLE</code></td>
+              <td>Liability</td>
+              <td class="dir-cell credit">CREDIT</td>
+              <td style="text-align: right; font-variant-numeric: tabular-nums;">150000</td>
+              <td style="color: var(--muted);">Amount owed to merchant</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider wrapper">
+
+  <!-- API -->
+  <section id="api" class="section wrapper">
+    <div class="section-label">API Reference</div>
+    <h2>Fourteen endpoints, zero ambiguity</h2>
+    <p class="section-intro">Every write requires an <code style="font-family: var(--font-mono); font-size: 0.88rem;">Idempotency-Key</code> header. Retries are safe by design.</p>
+
+    <h3 style="margin-top: var(--space-md); margin-bottom: var(--space-xs); font-size: 1.1rem; color: var(--muted); font-family: var(--font-body); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;">Payments &amp; Ledger</h3>
+    <div class="api-endpoints">
+      <div class="api-row">
+        <span class="api-method post">POST</span>
+        <span class="api-path">/v1/payments</span>
+        <span class="api-note">Create + capture. Requires Idempotency-Key.</span>
+      </div>
+      <div class="api-row">
+        <span class="api-method get">GET</span>
+        <span class="api-path">/v1/payments/{id}</span>
+        <span class="api-note">Fetch a payment by ID.</span>
+      </div>
+      <div class="api-row">
+        <span class="api-method post">POST</span>
+        <span class="api-path">/v1/payments/{id}/refund</span>
+        <span class="api-note">Refund a captured payment.</span>
+      </div>
+      <div class="api-row">
+        <span class="api-method get">GET</span>
+        <span class="api-path">/v1/accounts/{code}/balance</span>
+        <span class="api-note">Live, derived account balance.</span>
+      </div>
+    </div>
+
+    <h3 style="margin-top: var(--space-md); margin-bottom: var(--space-xs); font-size: 1.1rem; color: var(--muted); font-family: var(--font-body); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;">Orchestration &amp; Risk</h3>
+    <div class="api-endpoints">
+      <div class="api-row">
+        <span class="api-method post">POST</span>
+        <span class="api-path">/v1/orchestrated-payments</span>
+        <span class="api-note">Saga-based authorize → risk-check → capture flow.</span>
+      </div>
+      <div class="api-row">
+        <span class="api-method post">POST</span>
+        <span class="api-path">/v1/risk/analyze/{paymentId}</span>
+        <span class="api-note">ML fraud score with SHAP explanations.</span>
+      </div>
+      <div class="api-row">
+        <span class="api-method get">GET</span>
+        <span class="api-path">/v1/risk/explanation/{paymentId}</span>
+        <span class="api-note">Human-readable risk narrative.</span>
+      </div>
+    </div>
+
+    <h3 style="margin-top: var(--space-md); margin-bottom: var(--space-xs); font-size: 1.1rem; color: var(--muted); font-family: var(--font-body); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;">Webhooks</h3>
+    <div class="api-endpoints">
+      <div class="api-row">
+        <span class="api-method post">POST</span>
+        <span class="api-path">/v1/webhooks</span>
+        <span class="api-note">Register a webhook subscription.</span>
+      </div>
+      <div class="api-row">
+        <span class="api-method get">GET</span>
+        <span class="api-path">/v1/webhooks</span>
+        <span class="api-note">List all subscriptions.</span>
+      </div>
+      <div class="api-row">
+        <span class="api-method delete">DEL</span>
+        <span class="api-path">/v1/webhooks/{id}</span>
+        <span class="api-note">Deactivate a subscription.</span>
+      </div>
+    </div>
+
+    <h3 style="margin-top: var(--space-md); margin-bottom: var(--space-xs); font-size: 1.1rem; color: var(--muted); font-family: var(--font-body); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;">Reconciliation</h3>
+    <div class="api-endpoints">
+      <div class="api-row">
+        <span class="api-method post">POST</span>
+        <span class="api-path">/v1/reconciliation/upload</span>
+        <span class="api-note">Upload a settlement CSV and reconcile.</span>
+      </div>
+      <div class="api-row">
+        <span class="api-method get">GET</span>
+        <span class="api-path">/v1/reconciliation/runs/{runId}</span>
+        <span class="api-note">Fetch reconciliation results.</span>
+      </div>
+    </div>
+
+    <div class="idem-grid">
+      <div class="idem-card">
+        <div class="idem-icon">↻</div>
+        <div>
+          <strong>Same key + same body</strong>
+          <p>Replays the original response. No new payment created.</p>
+        </div>
+      </div>
+      <div class="idem-card">
+        <div class="idem-icon">✕</div>
+        <div>
+          <strong>Same key + different body</strong>
+          <p>Returns 409 Conflict. Prevents accidental mutations.</p>
+        </div>
+      </div>
+      <div class="idem-card">
+        <div class="idem-icon">!</div>
+        <div>
+          <strong>Missing key</strong>
+          <p>Returns 400 Bad Request. Every write must be idempotent.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider wrapper">
+
+  <!-- Quickstart -->
+  <section class="section wrapper">
+    <div class="section-label">Quickstart</div>
+    <h2>Run it locally</h2>
+    <p class="section-intro">One command to start, one curl to test. Docker Compose spins up PostgreSQL and the application together.</p>
+
+    <div class="code-block">
+      <div class="code-header">
+        <div class="code-dots"><span></span><span></span><span></span></div>
+        terminal
+      </div>
+      <pre class="code-body"><span class="c"># Start Postgres + the app</span>
+<span class="k">docker compose</span> up --build
+
+<span class="c"># Create a payment (idempotent)</span>
+<span class="k">curl</span> -s -X POST http://localhost:8080/v1/payments \
+  -H <span class="s">"Content-Type: application/json"</span> \
+  -H <span class="s">"Idempotency-Key: demo-001"</span> \
+  -d <span class="s">'{"merchantReference":"order-42","amountMinor":150000,"currency":"INR"}'</span>
+
+<span class="c"># Retry the SAME request — same key → same result, charged once</span>
+<span class="k">curl</span> -s -X POST http://localhost:8080/v1/payments \
+  -H <span class="s">"Content-Type: application/json"</span> \
+  -H <span class="s">"Idempotency-Key: demo-001"</span> \
+  -d <span class="s">'{"merchantReference":"order-42","amountMinor":150000,"currency":"INR"}'</span>
+
+<span class="c"># Verify the ledger is balanced</span>
+<span class="k">curl</span> -s http://localhost:8080/v1/accounts/ACQUIRER_CASH/balance
+<span class="k">curl</span> -s http://localhost:8080/v1/accounts/MERCHANT_PAYABLE/balance
+<span class="c"># Both return 150000 ✓</span></pre>
+    </div>
+  </section>
+
+  <hr class="divider wrapper">
+
+  <!-- Tech Stack -->
+  <section id="stack" class="section wrapper">
+    <div class="section-label">Tech stack</div>
+    <h2>Built on proven infrastructure</h2>
+    <div class="stack-grid" style="margin-top: var(--space-md);">
+      <div class="stack-item">
+        <div class="stack-icon">21</div>
+        <div><strong>Java 21</strong><span>Records, sealed types, virtual threads</span></div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon">SB</div>
+        <div><strong>Spring Boot 3.3</strong><span>Web, Data JPA, Validation, Actuator</span></div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon">PG</div>
+        <div><strong>PostgreSQL 16</strong><span>CHECK constraints, unique keys, FKs</span></div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon">FW</div>
+        <div><strong>Flyway</strong><span>Versioned migrations, validate mode</span></div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon">TC</div>
+        <div><strong>Testcontainers</strong><span>Integration tests on real Postgres</span></div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon">OA</div>
+        <div><strong>springdoc / Swagger</strong><span>Live API documentation</span></div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon">🐳</div>
+        <div><strong>Docker Compose</strong><span>One-command local environment</span></div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon">OL</div>
+        <div><strong>Optimistic Locking</strong><span>@Version guards on state transitions</span></div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon">KF</div>
+        <div><strong>Apache Kafka</strong><span>Event bus with transactional outbox</span></div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon">WH</div>
+        <div><strong>HMAC Webhooks</strong><span>SHA-256 signed, exponential backoff</span></div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon">XG</div>
+        <div><strong>XGBoost</strong><span>ML fraud scoring with SHAP explanations</span></div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider wrapper">
+
+  <!-- Roadmap -->
+  <section id="roadmap" class="section wrapper">
+    <div class="section-label">Roadmap</div>
+    <h2>The wider platform</h2>
+    <p class="section-intro">Five of six phases are live. Each phase adds a production concern.</p>
+
+    <div class="roadmap" style="margin-top: var(--space-md);">
+      <div class="roadmap-item active">
+        <div class="roadmap-marker">1</div>
+        <div class="roadmap-content">
+          <h3>Financial Core</h3>
+          <p>Idempotent payment API, double-entry ledger, integer money, derived balances, Flyway migrations, Testcontainers integration tests.</p>
+          <span class="roadmap-tag done">Live</span>
+        </div>
+      </div>
+      <div class="roadmap-item active">
+        <div class="roadmap-marker">2</div>
+        <div class="roadmap-content">
+          <h3>Orchestrator</h3>
+          <p>Explicit state machine (INITIATED → AUTHORIZED → CAPTURED → SETTLED) with the saga pattern and compensating transactions over a Kafka event bus.</p>
+          <span class="roadmap-tag done">Live</span>
+        </div>
+      </div>
+      <div class="roadmap-item active">
+        <div class="roadmap-marker">3</div>
+        <div class="roadmap-content">
+          <h3>Webhooks + Reconciliation</h3>
+          <p>HMAC-SHA256 signed outbound events with exponential-backoff retries and dead-letter. Settlement CSV reconciliation with auto-settle on match.</p>
+          <span class="roadmap-tag done">Live</span>
+        </div>
+      </div>
+      <div class="roadmap-item active">
+        <div class="roadmap-marker">4</div>
+        <div class="roadmap-content">
+          <h3>AI Fraud Scoring</h3>
+          <p>XGBoost model with SHAP explanations in the decline response — every "declined: fraud" says why. Dockerized Python scoring service.</p>
+          <span class="roadmap-tag done">Live</span>
+        </div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-marker">5</div>
+        <div class="roadmap-content">
+          <h3>Smart Payment Routing</h3>
+          <p>Predict success probability per acquiring route and route to maximise expected success at minimum cost.</p>
+          <span class="roadmap-tag planned">Planned</span>
+        </div>
+      </div>
+      <div class="roadmap-item active">
+        <div class="roadmap-marker">6</div>
+        <div class="roadmap-content">
+          <h3>LLM Ops Assistant</h3>
+          <p>Natural-language queries over payment and risk data, powered by Anthropic Claude with template-based fallback for local dev.</p>
+          <span class="roadmap-tag done">Live</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="wrapper">
+      <div class="footer-inner">
+        <span class="footer-brand">LedgerFlow</span>
+        <ul class="footer-links">
+          <li><a href="https://github.com/taniyanandi/ledgerflow" target="_blank" rel="noopener">GitHub</a></li>
+          <li><a href="#principles">Design</a></li>
+          <li><a href="#api">API</a></li>
+          <li><a href="#roadmap">Roadmap</a></li>
+        </ul>
+      </div>
+      <p class="footer-copy">MIT License. Built to demonstrate payment infrastructure engineering.</p>
+    </div>
+  </footer>
+
+  <script>
+    // Close mobile nav on link click
+    document.querySelectorAll('.nav-links a').forEach(function(link) {
+      link.addEventListener('click', function() {
+        document.querySelector('.nav-links').classList.remove('open');
+      });
+    });
+  </script>
+</body>
+</html>
